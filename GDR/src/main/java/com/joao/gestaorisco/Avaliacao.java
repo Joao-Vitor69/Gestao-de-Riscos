@@ -3,26 +3,57 @@ package com.joao.gestaorisco;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.sql.ResultSet; // Importação necessária para buscar dados
+import java.sql.ResultSet; 
+import java.sql.Statement;
 
-// Esta classe agora é responsável tanto pelos dados quanto pela sua persistência (Persistência Anêmica)
+/**
+ * Classe de Modelo para Avaliação de Risco, implementando o Padrão Active Record
+ * para lidar com sua própria persistência.
+ */
 public class Avaliacao { 
 
-    // ---------- ATRIBUTOS ----------
-    private int id;                  
-    private int riscoId;              
-    private int impacto;              
-    private int probabilidade;        
-    private int urgencia;             
-    private int pontuacaoGeral;       
-    private String dataAvaliacao;     
-    private String responsavel;       
-    private String justificativa;     
+    // ---------- ATRIBUTOS (Mapeamento das Colunas da Tabela AVALIACAO) ----------
+    private int id;                  // Chave primária (PK), gerada pelo banco.
+    private int riscoId;             // Chave estrangeira (FK) para a tabela RISCO.
+    private int impacto;             // Métrica 1 da avaliação de risco.
+    private int probabilidade;       // Métrica 2 da avaliação de risco.
+    private int urgencia;            // Métrica 3 da avaliação de risco.
+    private int pontuacaoGeral;      // Resultado do cálculo: Impacto * Probabilidade * Urgência.
+    private String dataAvaliacao;     // Data em que a avaliação foi realizada (yyyy-MM-dd).
+    private String responsavel;       // Pessoa que realizou a avaliação.
+    private String justificativa;     // Racional para as notas atribuídas.
 
     // ---------- CONSTRUTOR P/ NOVAS AVALIAÇÕES ----------
-    // Inicializa uma avaliação com os dados fornecidos (id é gerado pelo banco)
-    public Avaliacao(int riscoId, int impacto, int probabilidade, int urgencia, int pontuacaoGeral, String dataAvaliacao, String responsavel, String justificativa) {
-        // O ID é 0/não-definido neste ponto, pois será gerado no banco.
+    /**
+     * Construtor para criar uma nova avaliação antes de salvá-la no banco.
+     * @param riscoId ID do Risco que está sendo avaliado.
+     * @param impacto Valor de 1 a 5.
+     * @param probabilidade Valor de 1 a 5.
+     * @param urgencia Valor de 1 a 5.
+     * @param dataAvaliacao Data da avaliação.
+     * @param responsavel Responsável.
+     * @param justificativa Racional.
+     */
+    public Avaliacao(int riscoId, int impacto, int probabilidade, int urgencia, 
+                     String dataAvaliacao, String responsavel, String justificativa) {
+        this.riscoId = riscoId;
+        this.impacto = impacto;
+        this.probabilidade = probabilidade;
+        this.urgencia = urgencia;
+        this.dataAvaliacao = dataAvaliacao;
+        this.responsavel = responsavel;
+        this.justificativa = justificativa;
+        // O cálculo da pontuação geral é feito no construtor
+        this.pontuacaoGeral = calcularPontuacao(impacto, probabilidade, urgencia);
+    }
+    
+    // ---------- CONSTRUTOR P/ CARREGAR AVALIAÇÕES DO BANCO ----------
+    /**
+     * Construtor completo usado pelos métodos de busca para recriar o objeto a partir do ResultSet.
+     */
+    public Avaliacao(int id, int riscoId, int impacto, int probabilidade, int urgencia, 
+                     int pontuacaoGeral, String dataAvaliacao, String responsavel, String justificativa) {
+        this.id = id;
         this.riscoId = riscoId;
         this.impacto = impacto;
         this.probabilidade = probabilidade;
@@ -33,46 +64,28 @@ public class Avaliacao {
         this.justificativa = justificativa;
     }
     
-    // ---------- CONSTRUTOR P/ CARREGAR DO BANCO (COM ID) ----------
-    // Este construtor é útil para instanciar o objeto quando ele é lido do banco de dados.
-    public Avaliacao(int id, int riscoId, int impacto, int probabilidade, int urgencia, int pontuacaoGeral, String dataAvaliacao, String responsavel, String justificativa) {
-        this(riscoId, impacto, probabilidade, urgencia, pontuacaoGeral, dataAvaliacao, responsavel, justificativa);
-        this.id = id;
+    // ---------- LÓGICA DE NEGÓCIO ----------
+    /**
+     * Calcula a pontuação geral do risco (Impacto * Probabilidade * Urgência).
+     */
+    private int calcularPontuacao(int impacto, int probabilidade, int urgencia) {
+        return impacto * probabilidade * urgencia;
     }
 
-
-    // ---------- GETTERS e SETTER para ID (Necessário para a persistência) ----------
-    public int getId() { return id; }  
-    // Adicionado setter para ID, pois o banco de dados atribui o valor após o INSERT
-    public void setId(int id) { this.id = id; } 
-    
-    // Os outros getters permanecem os mesmos:
-    public int getRiscoId() { return riscoId; }
-    public int getImpacto() { return impacto; }
-    public int getProbabilidade() { return probabilidade; }
-    public int getUrgencia() { return urgencia; }
-    public int getPontuacaoGeral() { return pontuacaoGeral; }
-    public String getDataAvaliacao() { return dataAvaliacao; }
-    public String getResponsavel() { return responsavel; }
-    public String getJustificativa() { return justificativa; }
-
-    
-    // ------------------------------------------------------------------
-    // ---------- MÉTODOS DE PERSISTÊNCIA (Substituindo o DAO) ----------
-    // ------------------------------------------------------------------
-    
+    // ---------- PERSISTÊNCIA (Método Salvar Active Record) ----------
     /**
-     * Insere a instância atual de Avaliacao no banco de dados.
-     * Tenta retornar o ID gerado pelo banco e atribuí-lo ao objeto.
+     * Salva o objeto Avaliacao no banco de dados (INSERT).
      */
-    public void salvar() { 
-        // Comando SQL com opção para retornar chaves geradas (Statement.RETURN_GENERATED_KEYS)
-        String sql = "INSERT INTO AVALIACAO (RISCO_ID, IMPACTO, PROBABILIDADE, URGENCIA, PONTUACAO_GERAL, DATA_AVALIACAO, RESPONSAVEL, JUSTIFICATIVA) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-
-        try (Connection conn = DatabaseManager.getConnection(); 
-             // Prepara a query e indica que queremos receber as chaves geradas
-             PreparedStatement stmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) { 
-
+    public void salvar() {
+        // SQL para inserção. O ID é gerado automaticamente pelo banco (H2).
+        String sql = "INSERT INTO AVALIACAO (RISCO_ID, IMPACTO, PROBABILIDADE, URGENCIA, PONTUACAO_GERAL, DATA_AVALIACAO, RESPONSAVEL, JUSTIFICATIVA) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        // O Statement.RETURN_GENERATED_KEYS é crucial para obter o ID gerado.
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            
+            // Mapeamento dos parâmetros
             stmt.setInt(1, this.getRiscoId());        
             stmt.setInt(2, this.getImpacto());        
             stmt.setInt(3, this.getProbabilidade());  
@@ -82,30 +95,84 @@ public class Avaliacao {
             stmt.setString(7, this.getResponsavel());   
             stmt.setString(8, this.getJustificativa()); 
 
-            int affectedRows = stmt.executeUpdate(); 
+            int affectedRows = stmt.executeUpdate(); // Executa o INSERT.
 
             if (affectedRows > 0) {
-                // Tenta recuperar o ID gerado pelo banco e atualizar o objeto
+                // Se a inserção foi bem-sucedida, tenta recuperar o ID gerado pelo banco (H2).
                 try (ResultSet rs = stmt.getGeneratedKeys()) {
                     if (rs.next()) {
-                        this.setId(rs.getInt(1)); // Atribui o ID gerado ao objeto
+                        this.setId(rs.getInt(1)); // Atribui o ID gerado de volta ao objeto.
                     }
                 }
             }
 
         } catch (SQLException e) { 
+            // Tratamento de erros de banco de dados durante a operação.
             System.err.println("Erro ao salvar Avaliação: " + e.getMessage());
             e.printStackTrace();   
         }
     }
     
-    // ---------- MÉTODO toString ----------
+    // ---------- MÉTODOS DE BUSCA (Para consulta) ----------
+
+    /**
+     * Busca a avaliação mais recente para um Risco específico (pela Pontuação Geral).
+     * @param riscoId O ID do Risco a ser consultado.
+     * @return O objeto Avaliacao mais recente ou null.
+     */
+    public static Avaliacao buscarMaisRecentePorRisco(int riscoId) {
+        // Seleciona a avaliação com a maior pontuação (ou a mais recente, dependendo do critério)
+        // Usaremos DATA_AVALIACAO para simular a mais recente.
+        String sql = "SELECT * FROM AVALIACAO WHERE RISCO_ID = ? ORDER BY DATA_AVALIACAO DESC, ID DESC LIMIT 1";
+        
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, riscoId);
+            
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    // Mapeia o ResultSet para um novo objeto Avaliacao (usando o construtor completo)
+                    return new Avaliacao(
+                        rs.getInt("ID"),
+                        rs.getInt("RISCO_ID"),
+                        rs.getInt("IMPACTO"),
+                        rs.getInt("PROBABILIDADE"),
+                        rs.getInt("URGENCIA"),
+                        rs.getInt("PONTUACAO_GERAL"),
+                        rs.getString("DATA_AVALIACAO"),
+                        rs.getString("RESPONSAVEL"),
+                        rs.getString("JUSTIFICATIVA")
+                    );
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Erro ao buscar avaliação mais recente: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return null; // Retorna nulo se não encontrar.
+    }
+    
+    // ---------- Getters e Setters (Essenciais para o JSP) ----------
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
+    public int getRiscoId() { return riscoId; }
+    public int getImpacto() { return impacto; }
+    public int getProbabilidade() { return probabilidade; }
+    public int getUrgencia() { return urgencia; }
+    public int getPontuacaoGeral() { return pontuacaoGeral; }
+    public String getDataAvaliacao() { return dataAvaliacao; }
+    public String getResponsavel() { return responsavel; }
+    public String getJustificativa() { return justificativa; }
+
+    // ---------- MÉTODO toString (Para exibição amigável na CLI) ----------
     @Override
     public String toString() {
         return "ID: " + id + 
                " | Impacto: " + impacto +
                " | Probabilidade: " + probabilidade +
-               " | Pontuacao: " + pontuacaoGeral +
-               " | Responsável: " + responsavel;
+               " | Urgência: " + urgencia +
+               " | Pontuação Geral: " + pontuacaoGeral +
+               " | Data: " + dataAvaliacao;
     }
 }

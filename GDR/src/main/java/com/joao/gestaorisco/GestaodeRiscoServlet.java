@@ -6,6 +6,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -35,122 +36,85 @@ public class GestaodeRiscoServlet extends HttpServlet {
 	// private final PlanoMitigacaoDAO planoDAO = new PlanoMitigacaoDAO();
 	// private final AcaoMitigacaoDAO acaoDAO = new AcaoMitigacaoDAO();
 
-	/**
-	 * Lida com as requisições GET. Roteia a requisição para a página JSP apropriada
-	 * com base no parâmetro "acao".
-	 *
-	 * @param request  o objeto HttpServletRequest que contém a requisição do
-	 *                 cliente
-	 * @param response o objeto HttpServletResponse que envia a resposta ao cliente
-	 * @throws ServletException se ocorrer um erro de servlet
-	 * @throws IOException      se ocorrer um erro de I/O
-	 */
 	@Override
 	protected void doGet(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 		String acao = request.getParameter("acao");
 
-		// Usa um switch para um controle de fluxo mais limpo
-		switch (acao != null ? acao : "listarRiscos") {
-		case "formRisco":
-			// Redireciona para o formulário de cadastro de novo risco
-			request.getRequestDispatcher("/formNovoRisco.jsp").forward(request, response);
-			break;
-		case "formAvaliacao":
-			// Obtém o ID do risco para a avaliação
-			int idRiscoAvaliacao = Integer.parseInt(request.getParameter("idRisco"));
-			// Armazena o ID na requisição para ser usado no formulário JSP
-			request.setAttribute("idRisco", idRiscoAvaliacao);
-			request.getRequestDispatcher("/formAvaliacao.jsp").forward(request, response);
-			break;
-		case "formPlano":
-			// Obtém o ID do risco para a criação do plano
-			int idRiscoPlano = Integer.parseInt(request.getParameter("idRisco"));
-			// Armazena o ID na requisição para ser usado no formulário JSP
-			request.setAttribute("idRisco", idRiscoPlano);
-			request.getRequestDispatcher("/formPlano.jsp").forward(request, response);
-			break;
-			// Código sugerido para GestaodeRiscoServlet.java (doGet)
+		if (acao == null) {
+			acao = "listarRiscos";
+		}
 
-		case "formAcao":
-		    // Tenta obter o ID do plano da URL. Se não vier, causará um erro 400 ou 500.
-		    String planoIdParam = request.getParameter("planoId");
-
-		    if (planoIdParam == null || planoIdParam.isEmpty()) {
-		        // Redireciona para um local seguro (Lista de Riscos) se o ID estiver faltando
-		        // O servidor não sabe para qual plano registrar a ação!
-		        response.sendRedirect("app?acao=listarRiscos&erro=ID_Plano_Ausente");
-		        return;
-		    }
-		    
-		    // Converte e armazena o ID na requisição (para ser lido pelo JSP)
-		    try {
-		        int planoId = Integer.parseInt(planoIdParam); 
-		        request.setAttribute("planoId", planoId);
-		        request.getRequestDispatcher("/formAcao.jsp").forward(request, response);
-		    } catch (NumberFormatException e) {
-		        // Se a string não for um número válido (ex: "abc")
-		        response.sendRedirect("app?acao=listarRiscos&erro=ID_Plano_Invalido");
-		    }
-		    break;
-		case "listarRiscos":
+		try {
+			switch (acao) {
+			case "listarRiscos":
+				listarRiscos(request, response);
+				break;
+			case "formNovoRisco":
+				formNovoRisco(request, response);
+				break;
+			case "formAvaliacao":
+				formAvaliacao(request, response);
+				break;
+			case "formPlano":
+				formPlano(request, response);
+				break;
+			case "formAcao":
+				formAcao(request, response); // Novo método adicionado
+				break;
+			case "listarPlanosPorRisco":
+				listarPlanosPorRisco(request, response);
+				break;
+			case "listarAcoesPorPlano":
+				listarAcoesPorPlano(request, response);
+				break;
+			default:
+				listarRiscos(request, response);
+				break;
+			}
+		} catch (Exception e) {
+			// Tratamento genérico de exceção
+			request.setAttribute("erro", "Ocorreu um erro interno: " + e.getMessage());
 			listarRiscos(request, response);
-			break;
-		case "listarPlanosPorRisco":
-			int i = Integer.parseInt(request.getParameter("idRisco"));
-			listarPlanosPorRisco(request, response, i);
-			break;
-		case "listarAcoesPorPlano":
-			int planoIdListar = Integer.parseInt(request.getParameter("planoId"));
-			listarAcoesPorPlano(request, response, planoIdListar);
-			break;
-		default:
-			// Ação padrão: lista todos os riscos
-			response.sendRedirect("app?acao=listarRiscos");
-			break;
-			
 		}
 	}
 
-	/**
-	 * Lida com as requisições POST. Roteia a requisição para o método de inserção
-	 * apropriado com base no parâmetro "acao".
-	 *
-	 * @param request  o objeto HttpServletRequest que contém a requisição do
-	 *                 cliente
-	 * @param response o objeto HttpServletResponse que envia a resposta ao cliente
-	 * @throws ServletException se ocorrer um erro de servlet
-	 * @throws IOException      se ocorrer um erro de I/O
-	 */
 	@Override
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 		String acao = request.getParameter("acao");
 
-		// Usa um switch para um controle de fluxo mais limpo no POST
-		switch (acao != null ? acao : "") {
-		case "inserirRisco":
-			inserirRisco(request, response);
-			break;
-		case "avaliarRisco":
-			avaliarRisco(request, response);
-			break;
-		case "inserirPlano":
-			inserirPlano(request, response);
-			break;
-		case "inserirAcao":
-			inserirAcao(request, response);
-			break;
-		default:
-			// Redireciona para a lista de riscos se a ação não for reconhecida
-			response.sendRedirect("app?acao=listarRiscos");
-			break;
+		if (acao == null) {
+			acao = "listarRiscos";
+		}
+
+		try {
+			switch (acao) {
+			case "inserirRisco":
+				inserirRisco(request, response);
+				break;
+			case "avaliarRisco":
+				avaliarRisco(request, response);
+				break;
+			case "inserirPlano":
+				inserirPlano(request, response);
+				break;
+			case "inserirAcao":
+				inserirAcao(request, response);
+				break;
+			default:
+				listarRiscos(request, response);
+				break;
+			}
+		} catch (Exception e) {
+			// Tratamento genérico de exceção
+			request.setAttribute("erro", "Ocorreu um erro interno: " + e.getMessage());
+			listarRiscos(request, response);
 		}
 	}
 
 	/**
-	 * Obtém e exibe a lista de todos os riscos. Agora chama o método estático
-	 * {@code Risco.listar()}.
+	 * Lista todos os riscos do banco de dados e os exibe em listaRiscos.jsp.
 	 *
 	 * @param request  o objeto HttpServletRequest
 	 * @param response o objeto HttpServletResponse
@@ -159,57 +123,29 @@ public class GestaodeRiscoServlet extends HttpServlet {
 	 */
 	private void listarRiscos(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
-		// Usa o método estático 'listar' do modelo Risco
-		List<Risco> riscos = Risco.listar();
-		// Adiciona a lista de riscos como um atributo da requisição
-		request.setAttribute("listaRiscos", riscos);
-		// Encaminha a requisição para a página JSP que exibirá a lista
+		// O método estático listarTodos() da classe Risco lida com a busca no BD.
+		List<Risco> listaRiscos = Risco.listar();
+		// Coloca a lista de riscos na requisição para ser acessada pelo JSP.
+		request.setAttribute("listaRiscos", listaRiscos);
+		// Encaminha a requisição para a página JSP.
 		request.getRequestDispatcher("/listaRiscos.jsp").forward(request, response);
 	}
 
 	/**
-	 * Obtém e exibe a lista de planos para um risco específico. Agora chama o
-	 * método estático {@code PlanoMitigacao.buscarPorRisco()}.
+	 * Encaminha para o formulário de novo risco.
 	 *
 	 * @param request  o objeto HttpServletRequest
 	 * @param response o objeto HttpServletResponse
-	 * @param idRisco  o ID do risco
 	 * @throws ServletException se ocorrer um erro de servlet
 	 * @throws IOException      se ocorrer um erro de I/O
 	 */
-	private void listarPlanosPorRisco(HttpServletRequest request, HttpServletResponse response, int idRisco)
+	private void formNovoRisco(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
-		// Busca os planos de mitigação associados a um risco específico
-		List<PlanoMitigacao> planos = PlanoMitigacao.buscarPorRisco(idRisco);
-		// Adiciona a lista de planos à requisição
-		request.setAttribute("listaPlanos", planos);
-		// Encaminha a requisição para a página JSP que exibirá a lista
-		request.getRequestDispatcher("/listaPlanos.jsp").forward(request, response);
+		request.getRequestDispatcher("/formNovoRisco.jsp").forward(request, response);
 	}
 
 	/**
-	 * Obtém e exibe a lista de ações para um plano específico. Agora chama o método
-	 * estático {@code AcaoMitigacao.buscarPorPlano()}.
-	 *
-	 * @param request  o objeto HttpServletRequest
-	 * @param response o objeto HttpServletResponse
-	 * @param planoId  o ID do plano
-	 * @throws ServletException se ocorrer um erro de servlet
-	 * @throws IOException      se ocorrer um erro de I/O
-	 */
-	private void listarAcoesPorPlano(HttpServletRequest request, HttpServletResponse response, int planoId)
-			throws ServletException, IOException {
-		// Busca as ações de mitigação associadas a um plano específico
-		List<AcaoMitigacao> acoes = AcaoMitigacao.buscarPorPlano(planoId);
-		// Adiciona a lista de ações à requisição
-		request.setAttribute("listaAcoes", acoes);
-		// Encaminha a requisição para a página JSP que exibirá a lista
-		request.getRequestDispatcher("/listaAcoes.jsp").forward(request, response);
-	}
-
-	/**
-	 * Insere um novo risco no banco de dados. Agora chama o método de instância
-	 * {@code novoRisco.salvar()}.
+	 * Insere um novo risco no banco. Agora chama {@code risco.salvar()}.
 	 *
 	 * @param request  o objeto HttpServletRequest
 	 * @param response o objeto HttpServletResponse
@@ -219,70 +155,158 @@ public class GestaodeRiscoServlet extends HttpServlet {
 	private void inserirRisco(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 		try {
-			// Extrai os parâmetros da requisição e converte para os tipos corretos
+			// Extrai os parâmetros
 			String descricao = request.getParameter("descricao");
 			String origem = request.getParameter("origem");
-			int tipoRiscoId = Integer.parseInt(request.getParameter("tipoRiscoId"));
+			// A data é gerada automaticamente no formato yyyy-MM-dd
 			String dataIdentificacao = LocalDate.now().toString();
+			int tipoRiscoId = Integer.parseInt(request.getParameter("tipoRiscoId"));
 
-			// Cria um novo objeto Risco com os dados do formulário
-			Risco novoRisco = new Risco(descricao, origem, dataIdentificacao, tipoRiscoId);
-			// Salva o novo risco chamando o método de instância do modelo
-			novoRisco.salvar();
+			// Cria e salva o objeto Risco, usando o método de instância 'salvar()'
+			Risco risco = new Risco(descricao, origem, dataIdentificacao, tipoRiscoId);
+			risco.salvar();
 
-			// Redireciona para a página de listagem após a inserção
+			// Redireciona para a lista principal após a inserção
 			response.sendRedirect("app?acao=listarRiscos");
 		} catch (NumberFormatException e) {
-			// Em caso de erro de formato de número, exibe uma mensagem para o usuário
-			request.setAttribute("erro", "ID do Tipo de Risco inválido.");
-			// Retorna o usuário para o formulário com a mensagem de erro
+			request.setAttribute("erro", "ID do Tipo de Risco inválido ou ausente.");
+			request.getRequestDispatcher("/formNovoRisco.jsp").forward(request, response);
+		} catch (Exception e) {
+			request.setAttribute("erro", "Erro ao inserir risco: " + e.getMessage());
 			request.getRequestDispatcher("/formNovoRisco.jsp").forward(request, response);
 		}
 	}
 
 	/**
-	 * Avalia um risco existente no banco de dados. Agora chama
-	 * {@code avaliacao.salvar()} e {@code Risco.atualizarStatus()}.
+	 * Prepara o formulário de avaliação de risco.
 	 *
 	 * @param request  o objeto HttpServletRequest
 	 * @param response o objeto HttpServletResponse
 	 * @throws ServletException se ocorrer um erro de servlet
 	 * @throws IOException      se ocorrer um erro de I/O
 	 */
+	private void formAvaliacao(HttpServletRequest request, HttpServletResponse response)
+			throws ServletException, IOException {
+		// Código Correto no Servlet (Exemplo: GestaodeRiscoServlet.java ou
+		// Deletar.java)
+
+		// CÓDIGO CORRETO NO SERVLET (Exemplo: deletar.java)
+
+		try {
+			int id = Integer.parseInt(request.getParameter("id"));
+
+			// Simplesmente CHAME O MÉTODO e ignore o retorno
+			Risco.excluir(id);
+
+			// Se chegou até aqui, é sucesso
+			response.sendRedirect("listarRiscos");
+
+		} catch (Exception e) {
+			// Trata erro (SQL, NumberFormat, etc.)
+			request.setAttribute("erro", "Erro ao excluir: " + e.getMessage());
+			request.getRequestDispatcher("listarRiscos").forward(request, response);
+		}
+	}
+
+	/**
+	 * Processa a avaliação de um risco. Agora chama {@code avaliacao.salvar()}.
+	 *
+	 * @param request  o objeto HttpServletRequest
+	 * @param response o objeto HttpServletResponse
+	 * @throws ServletException se ocorrer um erro de servlet
+	 * @throws IOException      se ocorrer um erro de I/O
+	 */
+	// Este método deve estar dentro da classe GestaodeRiscoServlet.java
+
 	private void avaliarRisco(HttpServletRequest request, HttpServletResponse response)
+	        throws ServletException, IOException {
+	    
+	    // Para simplificar o código, você pode criar uma função auxiliar (veja abaixo)
+	    // ou usar um tratamento inline como este:
+
+	    String impactoStr = request.getParameter("impacto");
+	    String probabilidadeStr = request.getParameter("probabilidade");
+	    String urgenciaStr = request.getParameter("urgencia");
+	    
+	    try {
+	        // --- 🔑 CORREÇÃO CHAVE ---
+	        // Se a string for nula ou vazia, lançamos um erro de formato claro 
+	        // ou usamos um valor padrão (mas o erro é melhor, pois o campo é 'required').
+	        
+	        int impacto = (impactoStr != null && !impactoStr.trim().isEmpty()) 
+	                      ? Integer.parseInt(impactoStr.trim()) 
+	                      : 0; // Se for 0, o cálculo da pontuação falha (bom indicador de erro)
+	                      
+	        int probabilidade = (probabilidadeStr != null && !probabilidadeStr.trim().isEmpty()) 
+	                            ? Integer.parseInt(probabilidadeStr.trim()) 
+	                            : 0;
+	                            
+	        int urgencia = (urgenciaStr != null && !urgenciaStr.trim().isEmpty()) 
+	                       ? Integer.parseInt(urgenciaStr.trim()) 
+	                       : 0;
+
+	        // O idRisco também deve ser tratado
+	        int riscoId = Integer.parseInt(request.getParameter("idRisco")); 
+	        
+	        // 1. CÁLCULO AGORA FUNCIONA SEM ERRO
+	        int pontuacaoGeral = impacto * probabilidade * urgencia; 
+	        
+	        // 2. Outros parâmetros
+	        String responsavel = request.getParameter("responsavel");
+	        String justificativa = request.getParameter("justificativa");
+	        String dataAvaliacao = request.getParameter("dataAvaliacao"); // Garanta que este campo seja passado ou use a data atual (LocalDate.now())
+	        
+	        // 3. Criação e Persistência do Objeto Avaliacao
+	        // (Assumindo que Avaliacao.java já foi migrada corretamente)
+	        Avaliacao avaliacao = new Avaliacao(riscoId, impacto, probabilidade, urgencia, dataAvaliacao, responsavel, justificativa);
+	        avaliacao.salvar();
+
+	        // 4. Redireciona para a listagem principal de riscos
+	        response.sendRedirect("app?acao=listarRiscos"); 
+
+	    } catch (NumberFormatException e) {
+	        // Trata qualquer erro de conversão
+	        request.setAttribute("erro", "Erro de formato nos campos de Impacto, Probabilidade ou Urgência. Certifique-se de que todos foram preenchidos com números.");
+	        // Redireciona de volta ao formulário, mantendo o ID do Risco na requisição
+	        request.setAttribute("idRisco", request.getParameter("idRisco")); 
+	        request.getRequestDispatcher("/formAvaliacao.jsp").forward(request, response);
+	    } catch (Exception e) {
+	        // Trata outros erros (ex: erro de banco de dados)
+	        request.setAttribute("erro", "Erro ao registrar a Avaliação de Risco: " + e.getMessage());
+	        request.setAttribute("idRisco", request.getParameter("idRisco"));
+	        request.getRequestDispatcher("/formAvaliacao.jsp").forward(request, response);
+	    }
+	}
+
+	/**
+	 * Prepara o formulário de registro de Plano de Mitigação, garantindo que o ID
+	 * do Risco esteja presente e seja válido.
+	 *
+	 * @param request  o objeto HttpServletRequest
+	 * @param response o objeto HttpServletResponse
+	 * @throws ServletException se ocorrer um erro de servlet
+	 * @throws IOException      se ocorrer um erro de I/O
+	 */
+	private void formPlano(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 		try {
-			// Extrai os parâmetros e converte para inteiros
+			// Obtém o ID do Risco da requisição (do parâmetro 'idRisco' da URL/Form)
 			int idRisco = Integer.parseInt(request.getParameter("idRisco"));
-			int impacto = Integer.parseInt(request.getParameter("impacto"));
-			int probabilidade = Integer.parseInt(request.getParameter("probabilidade"));
-			int urgencia = Integer.parseInt(request.getParameter("urgencia"));
-			String responsavel = request.getParameter("responsavel");
-			String justificativa = request.getParameter("justificativa");
 
-			// Calcula a pontuação e obtém a data atual
-			int pontuacaoGeral = impacto * probabilidade * urgencia;
-			String dataAvaliacao = LocalDate.now().toString();
+			// Armazena o ID do Risco na requisição para que o JSP possa usá-lo
+			request.setAttribute("idRisco", idRisco);
 
-			// Cria um novo objeto Avaliacao com os dados e a pontuação calculada
-			Avaliacao avaliacao = new Avaliacao(idRisco, impacto, probabilidade, urgencia, pontuacaoGeral,
-					dataAvaliacao, responsavel, justificativa);
-			// Salva a nova avaliação no banco de dados
-			avaliacao.salvar();
-			// Atualiza o status do risco para 'Avaliado' usando o método estático
-			Risco.atualizarStatus(idRisco, "Avaliado");
-
-			response.sendRedirect("app?acao=listarRiscos");
+			// Encaminha para o formulário
+			request.getRequestDispatcher("/formPlano.jsp").forward(request, response);
 		} catch (NumberFormatException e) {
-			// Em caso de erro, define uma mensagem de erro e redireciona para o formulário
-			request.setAttribute("erro", "Valores de avaliação inválidos.");
-			request.getRequestDispatcher("/formAvaliacao.jsp").forward(request, response);
+			request.setAttribute("erro", "ID do Risco inválido.");
+			request.getRequestDispatcher("/listaRiscos.jsp").forward(request, response);
 		}
 	}
 
 	/**
 	 * Insere um novo plano de mitigação para um risco. Agora chama
-	 * {@code plano.salvar()} e {@code Risco.atualizarStatus()}.
+	 * {@code plano.salvar()}.
 	 *
 	 * @param request  o objeto HttpServletRequest
 	 * @param response o objeto HttpServletResponse
@@ -291,22 +315,86 @@ public class GestaodeRiscoServlet extends HttpServlet {
 	 */
 	private void inserirPlano(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
+		// Exemplo de como deve ficar seu Servlet de exclusão:
+
 		try {
-			// Extrai os parâmetros e cria um novo objeto PlanoMitigacao
+			// 1. Obtém o ID do parâmetro
+			int riscoId = Integer.parseInt(request.getParameter("id"));
+
+			// ***************************************************************
+			// CORREÇÃO: A linha que estava dando erro deve ser substituída por:
+			Risco.excluir(riscoId);
+			// ***************************************************************
+
+			// 2. Se a chamada acima não lançou exceção, a exclusão foi bem-sucedida.
+			response.sendRedirect("listarRiscos"); // Redireciona para a lista
+
+		} catch (NumberFormatException e) {
+			// Se o ID for inválido
+			request.setAttribute("erro", "ID de Risco inválido para exclusão.");
+			request.getRequestDispatcher("/listarRiscos").forward(request, response);
+
+		} catch (SQLException e) {
+			// 3. Se deu erro no banco (ex: chave estrangeira), capturamos aqui.
+			request.setAttribute("erro",
+					"Erro ao excluir Risco. Verifique se existem Avaliações ou Planos vinculados a ele.");
+			request.getRequestDispatcher("/listarRiscos").forward(request, response);
+
+		} catch (Exception e) {
+			// Trata outras exceções
+			// ...
+		}
+	}
+
+	/**
+	 * Lista todos os planos de mitigação para um risco específico.
+	 *
+	 * @param request  o objeto HttpServletRequest
+	 * @param response o objeto HttpServletResponse
+	 * @throws ServletException se ocorrer um erro de servlet
+	 * @throws IOException      se ocorrer um erro de I/O
+	 */
+	private void listarPlanosPorRisco(HttpServletRequest request, HttpServletResponse response)
+			throws ServletException, IOException {
+		try {
 			int idRisco = Integer.parseInt(request.getParameter("idRisco"));
-			String descricao = request.getParameter("descricao");
-			String dataProposta = LocalDate.now().toString();
 
-			PlanoMitigacao plano = new PlanoMitigacao(idRisco, descricao, dataProposta, "Proposto");
-			// Salva o plano no banco
-			plano.salvar();
-			// Atualiza o status do risco associado
-			Risco.atualizarStatus(idRisco, "Com Plano");
+			// Busca os planos e coloca na requisição
+			List<PlanoMitigacao> listaPlanos = PlanoMitigacao.buscarPorRisco(idRisco);
+			request.setAttribute("listaPlanos", listaPlanos);
+			request.setAttribute("riscoId", idRisco); // Para referência no JSP
 
-			response.sendRedirect("app?acao=listarRiscos");
+			// Encaminha para o JSP que lista os planos e ações
+			request.getRequestDispatcher("/listaAcoes.jsp").forward(request, response);
 		} catch (NumberFormatException e) {
 			request.setAttribute("erro", "ID do Risco inválido.");
-			request.getRequestDispatcher("/formPlano.jsp").forward(request, response);
+			listarRiscos(request, response);
+		}
+	}
+
+	/**
+	 * Prepara o formulário de registro de Ação de Mitigação, garantindo que o ID do
+	 * Plano esteja presente e seja válido.
+	 *
+	 * @param request  o objeto HttpServletRequest
+	 * @param response o objeto HttpServletResponse
+	 * @throws ServletException se ocorrer um erro de servlet
+	 * @throws IOException      se ocorrer um erro de I/O
+	 */
+	private void formAcao(HttpServletRequest request, HttpServletResponse response)
+			throws ServletException, IOException {
+		try {
+			// Obtém o ID do Plano da requisição (do parâmetro 'planoId' da URL/Form)
+			int planoId = Integer.parseInt(request.getParameter("planoId"));
+
+			// Armazena o ID do Plano na requisição para que o JSP possa usá-lo
+			request.setAttribute("planoId", planoId);
+
+			// Encaminha para o formulário
+			request.getRequestDispatcher("/formAcao.jsp").forward(request, response);
+		} catch (NumberFormatException e) {
+			request.setAttribute("erro", "ID do Plano de Mitigação inválido ou ausente.");
+			request.getRequestDispatcher("/listaRiscos.jsp").forward(request, response);
 		}
 	}
 
@@ -322,14 +410,22 @@ public class GestaodeRiscoServlet extends HttpServlet {
 	private void inserirAcao(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 		try {
-			// Extrai os parâmetros para criar a nova ação
-			int planoId = Integer.parseInt(request.getParameter("planoId"));
+			// Extrai o parâmetro como string primeiro
+			String planoIdStr = request.getParameter("planoId");
+
+			// Validação robusta para evitar NumberFormatException na string "null"
+			if (planoIdStr == null || planoIdStr.trim().isEmpty() || planoIdStr.trim().equalsIgnoreCase("null")) {
+				throw new NumberFormatException("planoId é nulo ou inválido.");
+			}
+
+			// Agora que validamos, podemos converter para int
+			int planoId = Integer.parseInt(planoIdStr);
+
 			String descricao = request.getParameter("descricao");
 			String responsavel = request.getParameter("responsavel");
 			String prazoConclusao = request.getParameter("prazoConclusao");
 
 			// O progresso é definido internamente como 'Pendente' no modelo AcaoMitigacao
-			// O construtor correto é chamado aqui:
 			AcaoMitigacao acao = new AcaoMitigacao(planoId, descricao, responsavel, prazoConclusao);
 			// Salva a ação no banco
 			acao.salvar();
@@ -337,8 +433,41 @@ public class GestaodeRiscoServlet extends HttpServlet {
 			// Redireciona para a lista principal após a inserção
 			response.sendRedirect("app?acao=listarRiscos");
 		} catch (NumberFormatException e) {
-			request.setAttribute("erro", "ID do Plano inválido.");
+			request.setAttribute("erro", "ID do Plano de Mitigação inválido ou ausente.");
+			// Em caso de erro, redireciona de volta ao formulário
+			request.getRequestDispatcher("/formAcao.jsp").forward(request, response);
+		} catch (Exception e) {
+			request.setAttribute("erro", "Erro ao inserir ação de mitigação: " + e.getMessage());
+			// Em caso de erro, redireciona de volta ao formulário
 			request.getRequestDispatcher("/formAcao.jsp").forward(request, response);
 		}
 	}
+
+	/**
+	 * Lista todas as ações de mitigação para um plano específico.
+	 *
+	 * @param request  o objeto HttpServletRequest
+	 * @param response o objeto HttpServletResponse
+	 * @throws ServletException se ocorrer um erro de servlet
+	 * @throws IOException      se ocorrer um erro de I/O
+	 */
+	private void listarAcoesPorPlano(HttpServletRequest request, HttpServletResponse response)
+			throws ServletException, IOException {
+		try {
+			int planoId = Integer.parseInt(request.getParameter("planoId"));
+
+			// Busca as ações e coloca na requisição
+			List<AcaoMitigacao> listaAcoes = AcaoMitigacao.buscarPorPlano(planoId);
+			request.setAttribute("listaAcoes", listaAcoes);
+			request.setAttribute("planoId", planoId); // Para referência no JSP
+
+			// Encaminha para o JSP que lista as ações
+			request.getRequestDispatcher("/detalheAcoes.jsp").forward(request, response);
+		} catch (NumberFormatException e) {
+			request.setAttribute("erro", "ID do Plano inválido.");
+			// Se o ID for inválido, volta para a lista de planos/riscos
+			response.sendRedirect("app?acao=listarRiscos");
+		}
+	}
+
 }

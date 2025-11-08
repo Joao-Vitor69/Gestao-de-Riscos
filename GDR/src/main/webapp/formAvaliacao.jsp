@@ -1,4 +1,5 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%-- Configura a JSTL Core Library (prefixo "c") --%>
 <%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
 <!DOCTYPE html>
 <html>
@@ -6,6 +7,7 @@
 <meta charset="UTF-8">
 <title>Avaliar Risco</title>
 <style>
+    /* Estilos CSS para formatação e aparência da página */
     body { 
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
         margin: 0; 
@@ -14,17 +16,19 @@
         color: #333;
         display: flex;
         flex-direction: column;
-        align-items: center;
+        align-items: center; /* Centraliza o conteúdo (título e formulário) horizontalmente */
     }
     h2 { 
         color: #2c3e50; 
         margin-bottom: 25px;
-        border-bottom: 3px solid #f39c12; /* Cor mais próxima do amarelo/laranja do seu botão de Avaliar */
+        /* Define a cor da linha de destaque abaixo do título (amarelo/laranja) */
+        border-bottom: 3px solid #f39c12; 
         padding-bottom: 10px;
         width: 100%;
         max-width: 600px;
         text-align: center;
     }
+    /* Estilo principal do contêiner do formulário */
     form { 
         width: 100%;
         max-width: 600px; 
@@ -41,7 +45,7 @@
         font-weight: 600; 
         color: #2c3e50;
     }
-    /* Estilo unificado para inputs, number, e textarea */
+    /* Estilo unificado para campos de entrada de texto, número e área de texto */
     input[type="text"], 
     input[type="number"], 
     textarea { 
@@ -54,13 +58,15 @@
         transition: border-color 0.3s;
         resize: vertical; /* Permite redimensionar verticalmente o textarea */
     }
+    /* Efeito de foco com a cor de destaque (laranja/amarelo) */
     input[type="text"]:focus, 
     input[type="number"]:focus,
     textarea:focus {
-        border-color: #f39c12; /* Foco laranja/amarelo */
+        border-color: #f39c12; 
         outline: none;
         box-shadow: 0 0 5px rgba(243, 156, 18, 0.5);
     }
+    /* Estilo base para todos os botões/links */
     .btn { 
         padding: 12px 20px; 
         color: black; 
@@ -73,12 +79,14 @@
         display: inline-block;
         text-align: center;
     }
+    /* Estilo específico para o botão de submissão */
     .btn-submit {
-        background-color: #ffc107; /* Cor original do botão de Avaliar */
+        background-color: #ffc107; /* Amarelo/Laranja */
     }
     .btn-submit:hover { 
         background-color: #e0a800; 
     }
+    /* Estilo para o botão de voltar */
     .back-link {
         margin-top: 20px;
         background-color: #95a5a6;
@@ -86,6 +94,7 @@
     .back-link:hover {
         background-color: #7f8c8d;
     }
+    /* Estilo para exibição de mensagens de erro */
     .error { 
         color: #e74c3c; 
         font-weight: bold; 
@@ -100,7 +109,9 @@
 <body>
     <h2>Avaliar Risco</h2>
     
+    <%-- JSTL: Verifica se a variável 'erro' (definida no Servlet) NÃO está vazia --%>
     <c:if test="${not empty erro}">
+        <%-- Exibe a mensagem de erro formatada --%>
         <p class="error"><c:out value="${erro}"/></p>
     </c:if>
     

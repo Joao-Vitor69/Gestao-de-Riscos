@@ -4,22 +4,28 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement; // Necessário para gerar chaves
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Classe de Modelo para Ações de Mitigação, implementando o Padrão Active Record
+ * para lidar com sua própria persistência.
+ */
 public class AcaoMitigacao {
+    
     // ATRIBUTOS (FIELDS)
     private int id; 
-    private int planoId; 
+    private int planoId; // Chave estrangeira para a tabela PLANO_MITIGACAO
     private String descricao; 
     private String responsavel; 
-    private String prazoConclusao; 
+    private String prazoConclusao; // Data limite (yyyy-MM-dd)
+    private String progresso; // Ex: Pendente, Em Andamento, Concluído
+    // Opcionais (não usados nos construtores atuais para simplificar)
     private String dataConclusao; 
-    private String progresso; 
     private String observacoes; 
 
-    // CONSTRUTOR P/ NOVO OBJETO (O ID será gerado pelo banco)
+    // CONSTRUTOR P/ NOVO OBJETO (O ID do Plano é OBRIGATÓRIO)
     public AcaoMitigacao(int planoId, String descricao, String responsavel, String prazoConclusao) {
         this.planoId = planoId;
         this.descricao = descricao;
@@ -28,7 +34,7 @@ public class AcaoMitigacao {
         this.progresso = "Pendente"; // Status inicial
     }
 
-    // CONSTRUTOR P/ CARREGAR DO BANCO (Completo, com ID e Progresso)
+    // CONSTRUTOR P/ CARREGAR DO BANCO (Completo)
     public AcaoMitigacao(int id, int planoId, String descricao, String responsavel, String prazoConclusao, String progresso) {
         this.id = id;
         this.planoId = planoId;
@@ -38,84 +44,69 @@ public class AcaoMitigacao {
         this.progresso = progresso;
     }
 
-    // GETTERS
-    public int getId() { return id; }
-    public int getPlanoId() { return planoId; }
-    public String getDescricao() { return descricao; }
-    public String getResponsavel() { return responsavel; }
-    public String getPrazoConclusao() { return prazoConclusao; }
-    public String getDataConclusao() { return dataConclusao; }
-    public String getProgresso() { return progresso; }
-    public String getObservacoes() { return observacoes; }
-    
-    // SETTERS
-    // Se o erro estava aqui, era porque o código anterior estava faltando!
-    public void setId(int id) { this.id = id; }
-    public void setPlanoId(int planoId) { this.planoId = planoId; }
-    public void setDescricao(String descricao) { this.descricao = descricao; }
-    public void setResponsavel(String responsavel) { this.responsavel = responsavel; }
-    public void setPrazoConclusao(String prazoConclusao) { this.prazoConclusao = prazoConclusao; }
-    public void setDataConclusao(String dataConclusao) { this.dataConclusao = dataConclusao; }
-    public void setProgresso(String progresso) { this.progresso = progresso; }
-    public void setObservacoes(String observacoes) { this.observacoes = observacoes; }
-
-    @Override
-    public String toString() {
-        return "ID: " + id + " | Ação: " + descricao + " | Responsável: " + responsavel + " | Progresso: " + progresso;
-    }
-
-    // --- FUNCIONALIDADE DE INSERÇÃO (MIGREI A LÓGICA DE RECUPERAR O ID) ---
+    /**
+     * Salva a Ação de Mitigação no banco de dados (INSERT).
+     * O ID da ação é gerado automaticamente pelo banco (H2).
+     */
     public void salvar() {
-        // Incluí a opção para recuperar o ID gerado automaticamente.
-        String sql = "INSERT INTO ACAO_MITIGACAO (PLANO_ID, DESCRICAO, RESPONSAVEL, PRAZO_CONCLUSAO, PROGRESSO) VALUES (?, ?, ?, ?, ?)";
+        // SQL para inserção. O ID é gerado, o PROGRESSO é definido no construtor.
+        String sql = "INSERT INTO ACAO_MITIGACAO (PLANO_ID, DESCRICAO, RESPONSAVEL, PRAZO_CONCLUSAO, PROGRESSO) " +
+                     "VALUES (?, ?, ?, ?, ?)";
         
+        // Uso de try-with-resources para garantir o fechamento de Connection, PreparedStatement e ResultSet
         try (Connection conn = DatabaseManager.getConnection();
-             // Indica que queremos recuperar o ID gerado.
-             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) { 
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+
+            // Mapeamento dos parâmetros para o SQL
+            stmt.setInt(1, this.planoId);
+            stmt.setString(2, this.descricao);
+            stmt.setString(3, this.responsavel);
+            stmt.setString(4, this.prazoConclusao);
+            stmt.setString(5, this.progresso); 
             
-            stmt.setInt(1, this.getPlanoId());
-            stmt.setString(2, this.getDescricao());
-            stmt.setString(3, this.getResponsavel());
-            stmt.setString(4, this.getPrazoConclusao());
-            stmt.setString(5, this.getProgresso());
-            
-            int affectedRows = stmt.executeUpdate();
-            
+            int affectedRows = stmt.executeUpdate(); // Executa o INSERT.
+
             if (affectedRows > 0) {
-                // Tenta recuperar o ID gerado e atualizar o objeto
-                try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
-                    if (generatedKeys.next()) {
-                        this.setId(generatedKeys.getInt(1));
+                // Tenta recuperar o ID gerado (necessário para o Active Record)
+                try (ResultSet rs = stmt.getGeneratedKeys()) {
+                    if (rs.next()) {
+                        this.id = rs.getInt(1); // Atribui o ID gerado de volta ao objeto.
                     }
                 }
             }
-            
-        } catch (SQLException e) {
+
+        } catch (SQLException e) { 
             System.err.println("Erro ao salvar a Ação de Mitigação: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-    // --- FUNCIONALIDADE DE BUSCA (MIGRADA DO DAO) ---
+    // --- FUNCIONALIDADE DE BUSCA (USADA PELO SERVLET) ---
+    /**
+     * Busca todas as Ações de Mitigação associadas a um Plano de Mitigação específico.
+     * @param planoId O ID do plano de mitigação.
+     * @return Lista de AcaoMitigacao.
+     */
     public static List<AcaoMitigacao> buscarPorPlano(int planoId) {
         List<AcaoMitigacao> acoes = new ArrayList<>();
-        String sql = "SELECT * FROM ACAO_MITIGACAO WHERE PLANO_ID = ?";
+        // A busca é feita usando o PLANO_ID
+        String sql = "SELECT * FROM ACAO_MITIGACAO WHERE PLANO_ID = ?"; 
         
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
-            stmt.setInt(1, planoId);
+            // O ID do Plano é usado como critério de busca
+            stmt.setInt(1, planoId); 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    // Mapeamento do ResultSet para o Objeto
+                    // Mapeia o resultado do ResultSet para um novo objeto AcaoMitigacao
                     AcaoMitigacao acao = new AcaoMitigacao(
                         rs.getInt("ID"),
-                        rs.getInt("PLANO_ID"),
+                        rs.getInt("PLANO_ID"), // <-- O valor é lido aqui
                         rs.getString("DESCRICAO"),
                         rs.getString("RESPONSAVEL"),
                         rs.getString("PRAZO_CONCLUSAO"),
                         rs.getString("PROGRESSO")
-                        // Os campos dataConclusao e observacoes estão sendo ignorados neste construtor.
                     );
                     acoes.add(acao);
                 }
@@ -125,5 +116,21 @@ public class AcaoMitigacao {
             e.printStackTrace();
         }
         return acoes;
+    }
+
+    // --- Getters (Essenciais para o JSP) ---
+    public int getId() { return id; }
+    public int getPlanoId() { return planoId; }
+    public String getDescricao() { return descricao; }
+    public String getResponsavel() { return responsavel; }
+    public String getPrazoConclusao() { return prazoConclusao; }
+    public String getProgresso() { return progresso; }
+    // ... (Setters omitidos para manter o foco na imutabilidade e persistência)
+    
+    // Método toString para exibição em Console (CLI)
+    @Override
+    public String toString() {
+        return String.format("Ação ID: %d | Plano ID: %d | Descrição: %s | Responsável: %s | Prazo: %s | Progresso: %s",
+                             id, planoId, descricao, responsavel, prazoConclusao, progresso);
     }
 }

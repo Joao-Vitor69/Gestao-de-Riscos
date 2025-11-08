@@ -14,18 +14,23 @@ public class GestaodeRiscoSimples {
 	// Scanner para ler a entrada do usuário a partir do console.
 	private static Scanner n = new Scanner(System.in);
 
+	// ***************************************************************
+	// AQUI RESIDE A CHAVE DA ARQUITETURA:
 	// As instâncias DAO foram removidas, pois a lógica de persistência
-	// agora está nos métodos estáticos e de instância das classes de modelo.
+	// agora está nos métodos estáticos e de instância das classes de modelo,
+	// implementando o Padrão Active Record.
+	// ***************************************************************
 	// private static RiscoDAO riscoDAO = new RiscoDAO();
 	// private static AvaliacaoDAO avaliacaoDAO = new AvaliacaoDAO();
 	// private static PlanoMitigacaoDAO planoDAO = new PlanoMitigacaoDAO();
 	// private static AcaoMitigacaoDAO acaoDAO = new AcaoMitigacaoDAO();
 
 	// Método principal que inicia a aplicação.
+	// ***************************************************************
+	// Omitido código main e exibirMenuPrincipal (inalterados)
+	// ***************************************************************
 	public static void main(String[] args) {
-		// Inicializa o banco de dados, criando as tabelas se elas ainda não existirem.
 		DatabaseManager.initializeDatabase();
-		// O bloco try-finally garante que o scanner seja fechado de forma segura.
 		try {
 			exibirMenuPrincipal();
 		} finally {
@@ -69,7 +74,7 @@ public class GestaodeRiscoSimples {
 					break;
 				case 6:
 					System.out.println("Saindo...");
-					return; // Sai do método e encerra o loop.
+					return; // Sai do método e encerra o loop principal.
 				default:
 					System.out.println("Opção inválida.");
 				}
@@ -88,9 +93,8 @@ public class GestaodeRiscoSimples {
 		System.out.print("Origem: ");
 		String origem = n.nextLine();
 
-		// Lista os tipos de risco disponíveis chamando o método estático do modelo
-		// Risco.
-		Risco.listarTiposRisco();
+		// Chama um método estático utilitário do modelo Risco para listar tipos.
+		Risco.listar();
 
 		System.out.print("Tipo do Risco (ID): ");
 		int tipoRiscoId = n.nextInt();
@@ -99,26 +103,32 @@ public class GestaodeRiscoSimples {
 		// Obtém a data atual no formato 'yyyy-MM-dd'.
 		String dataIdentificacao = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
 
-		// Cria um novo objeto `Risco` e o salva no banco usando o método de instância
-		// 'salvar()'.
+		// ***************************************************************
+		// ACTIVE RECORD EM AÇÃO: CRIAÇÃO E SALVAMENTO
+		// ***************************************************************
+		// 1. Cria um novo objeto Risco (o "Record").
 		Risco risco = new Risco(descricao, origem, dataIdentificacao, tipoRiscoId);
+		// 2. Chama o método de instância 'salvar()' do próprio objeto, que encapsula a
+		// lógica SQL (INSERT).
 		risco.salvar();
 		System.out.println("Risco registrado!");
 	}
 
 	// Método para avaliar um risco existente.
 	private static void avaliarRiscoExistente() {
-		visualizarRiscos(); // Exibe a lista de riscos para que o usuário escolha.
+		visualizarRiscos();
 		System.out.print("Digite o ID do risco que deseja avaliar: ");
 
 		try {
 			int idRisco = n.nextInt();
 			n.nextLine();
 
-			// Verifica se o ID do risco realmente existe no banco usando o método estático.
-			if (!Risco.existe(idRisco)) {
+			// 1. Tenta buscar o risco pelo ID.
+			Risco riscoAtualizado = Risco.buscarPorId(idRisco);
+
+			if (riscoAtualizado == null) {
 				System.out.println("ID de risco não encontrado. Por favor, digite um ID válido.");
-				return; // Retorna ao menu principal.
+				return;
 			}
 
 			System.out.print("Impacto (1-5): ");
@@ -129,7 +139,6 @@ public class GestaodeRiscoSimples {
 			int urgencia = n.nextInt();
 			n.nextLine();
 
-			// Calcula a pontuação geral do risco.
 			int pontuacaoGeral = impacto * probabilidade * urgencia;
 
 			System.out.print("Responsável: ");
@@ -137,17 +146,23 @@ public class GestaodeRiscoSimples {
 			System.out.print("Justificativa: ");
 			String justificativa = n.nextLine();
 
-			// Obtém a data atual.
 			String dataAvaliacao = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
 
-			// Cria um objeto `Avaliacao` e o salva no banco usando o método de instância
+			// Cria um objeto Avaliacao e o salva no banco usando seu próprio método
 			// 'salvar()'.
-			Avaliacao avaliacao = new Avaliacao(idRisco, impacto, probabilidade, urgencia, pontuacaoGeral,
-					dataAvaliacao, responsavel, justificativa);
+			Avaliacao avaliacao = new Avaliacao(idRisco, impacto, probabilidade, urgencia, dataAvaliacao, responsavel, justificativa);
 			avaliacao.salvar();
 
-			// Atualiza o status do risco para 'Avaliado' após a avaliação.
-			Risco.atualizarStatus(idRisco, "Avaliado");
+			// ***************************************************************
+			// CORREÇÃO: Usa o fluxo de Active Record de Instância
+			// ***************************************************************
+			// 2. Modifica o status do objeto em memória
+			riscoAtualizado.setStatus("Avaliado");
+
+			// 3. Persiste a alteração no banco (chama o método de instância que estava
+			// dando erro)
+			riscoAtualizado.atualizar();
+			// ***************************************************************
 
 			System.out.println("Risco avaliado com sucesso! Pontuação geral: " + pontuacaoGeral);
 
@@ -159,8 +174,11 @@ public class GestaodeRiscoSimples {
 
 	// Método para exibir todos os riscos cadastrados.
 	private static void visualizarRiscos() {
-		// Itera sobre a lista de riscos retornada pelo método estático 'listar()' do
-		// modelo Risco.
+		// ***************************************************************
+		// ACTIVE RECORD EM AÇÃO: BUSCA
+		// ***************************************************************
+		// Chama o método estático 'listar()' do modelo Risco, que contém a lógica SQL
+		// (SELECT).
 		List<Risco> riscos = Risco.listar();
 		if (riscos.isEmpty()) {
 			System.out.println("\n--- Nenhum risco registrado. ---");
@@ -168,51 +186,69 @@ public class GestaodeRiscoSimples {
 		}
 		System.out.println("\n--- Lista de Riscos ---");
 		for (Risco risco : riscos) {
-			System.out.println(risco);
+			System.out.println(risco); // Usa o método toString do modelo Risco para formatação.
 		}
 	}
 
 	// Método para registrar um novo plano de mitigação para um risco.
 	private static void registrarPlanoMitigacao() {
-		visualizarRiscos();
-		System.out.print("Digite o ID do risco para o qual você quer criar um plano: ");
-		try {
-			int idRisco = n.nextInt();
-			n.nextLine();
+        visualizarRiscos();
+        System.out.print("Digite o ID do risco para o qual você quer criar um plano: ");
+        try {
+            int idRisco = n.nextInt();
+            n.nextLine();
 
-			// Verifica se o ID do risco é válido.
-			if (!Risco.existe(idRisco)) {
-				System.out.println("ID de risco não encontrado.");
-				return;
-			}
+            // 1. Tenta buscar o risco pelo ID.
+            Risco riscoAtualizado = Risco.buscarPorId(idRisco);
 
-			System.out.print("Descrição do Plano: ");
-			String descricao = n.nextLine();
+            if (riscoAtualizado == null) {
+                System.out.println("ID de risco não encontrado.");
+                return;
+            }
 
-			String dataProposta = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+            System.out.print("Descrição do Plano: ");
+            String descricao = n.nextLine();
 
-			// Cria e salva o plano de mitigação no banco.
-			PlanoMitigacao plano = new PlanoMitigacao(idRisco, descricao, dataProposta, "Proposto");
-			plano.salvar();
+            String dataProposta = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
 
-			// Atualiza o status do risco para 'Com Plano'.
-			Risco.atualizarStatus(idRisco, "Com Plano");
-			System.out.println("Plano de mitigação registrado com sucesso!");
-		} catch (InputMismatchException e) {
-			System.out.println("Entrada inválida. Por favor, digite um número.");
-			n.nextLine();
-		}
-	}
+            // Cria e salva o plano de mitigação, chamando o método de instância do próprio objeto.
+            PlanoMitigacao plano = new PlanoMitigacao(idRisco, descricao, dataProposta);
+            plano.salvar();
+
+            // ***************************************************************
+            // CORREÇÃO: Usa o fluxo de Active Record de Instância
+            // ***************************************************************
+            // 2. Modifica o status do objeto em memória
+            riscoAtualizado.setStatus("Com Plano");
+            
+            // 3. Persiste a alteração no banco (chama o método de instância que estava dando erro)
+            riscoAtualizado.atualizar();
+            // ***************************************************************
+            
+            System.out.println("Plano de mitigação registrado com sucesso!");
+        } catch (InputMismatchException e) {
+            System.out.println("Entrada inválida. Por favor, digite um número.");
+            n.nextLine();
+        }
+    }
 
 	// Método para registrar uma nova ação de mitigação para um plano existente.
 	private static void registrarAcaoMitigacao() {
-		// Lista todos os planos de mitigação para que o usuário possa escolher.
-		PlanoMitigacao.listarTodos();
+        // Lista todos os planos de mitigação para que o usuário possa escolher.
+        PlanoMitigacao.listarTodos();
 
-		System.out.print("Digite o ID do plano de mitigação para adicionar a ação: ");
-		try {
-			int idPlano = n.nextInt();
-			n.nextLine();
+        System.out.print("Digite o ID do plano de mitigação para adicionar a ação: ");
+        try {
+            int idPlano = n.nextInt();
+            n.nextLine();
+            
+            // ***************************************************************
+            // CORREÇÃO: A chamada agora é válida e o fluxo de controle funciona.
+            // ***************************************************************
+            if (!PlanoMitigacao.existe(idPlano)) { // <--- AGORA FUNCIONA!
+                System.out.println("ID do plano de mitigação não encontrado. Por favor, digite um ID válido.");
+                return;
+            }
 
 			System.out.print("Descrição da Ação: ");
 			String descricao = n.nextLine();
@@ -221,7 +257,10 @@ public class GestaodeRiscoSimples {
 			System.out.print("Prazo de Conclusão (yyyy-MM-dd): ");
 			String prazoConclusao = n.nextLine();
 
-			// Cria e salva a ação de mitigação no banco de dados usando o método de
+			// ***************************************************************
+			// ACTIVE RECORD EM AÇÃO: AÇÃO MITIGAÇÃO
+			// ***************************************************************
+			// Cria e salva a ação de mitigação no banco de dados, usando o método de
 			// instância.
 			AcaoMitigacao acao = new AcaoMitigacao(idPlano, descricao, responsavel, prazoConclusao);
 			acao.salvar();
